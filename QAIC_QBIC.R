@@ -21,12 +21,13 @@ calc_QAIC_QBIC <- function(model = NULL, L_hat, phi_hat, k, n, .type = "QAIC") {
   if(!is.null(model)) {
     L_hat <- as.numeric(logLik(model))
     phi_hat <- model$deviance/model$df.residual
-    k <- length(model$coefficients)
+    k <- length(model$coefficients)# + 2
     n <- nrow(model$data)
   }
   
   if(stringr::str_detect(tolower(.type), "aic")) {
     -2*L_hat+2*phi_hat*k
+    #-2*L_hat/phi_hat+2*k
   } else if(stringr::str_detect(tolower(.type), "bic")){
     -2*L_hat+log(n)*phi_hat*k
   }
@@ -46,7 +47,7 @@ qbic <- function(model = NULL, L, phi, k, n) {
 
 # Say we have the following model:
 fit1 <- glm(price ~ carat + x,
-            family = quasipoisson,
+            #family = quasipoisson,
             data = diamonds)
 
 # Because we are using the quasipoisson family, we cannot extract the 
