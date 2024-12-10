@@ -1,5 +1,6 @@
 library(tidyverse)
 library(gnm)
+#library(MuMIn); library(bbmle)
 
 # QAIC and QBIC functions -------------------------------------------------
 
@@ -47,7 +48,7 @@ qbic <- function(model = NULL, L, phi, k, n) {
 
 # Say we have the following model:
 fit1 <- glm(price ~ carat + x,
-            #family = quasipoisson,
+            family = quasipoisson,
             data = diamonds)
 
 # Because we are using the quasipoisson family, we cannot extract the 
