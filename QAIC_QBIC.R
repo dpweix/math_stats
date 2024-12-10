@@ -47,9 +47,9 @@ qbic <- function(model = NULL, L, phi, k, n) {
 # Example usage -----------------------------------------------------------
 
 # Say we have the following model:
-fit1 <- glm(price ~ carat + x,
-            family = quasipoisson,
-            data = diamonds)
+fit_quasi <- glm(price ~ carat + x,
+                 family = quasipoisson,
+                 data = diamonds)
 
 # Because we are using the quasipoisson family, we cannot extract the 
 # log-likelihood.
@@ -73,7 +73,7 @@ n <- nrow(fit0$data)
 
 # Alternatively, we can use the functions defined above. However, we need to 
 # give the correct model.
-qaic(fit1)
+qaic(fit_qasi)
 qaic(fit0)
 
 # Test out functions ------------------------------------------------------
