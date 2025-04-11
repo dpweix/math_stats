@@ -1,105 +1,93 @@
-library(tidyverse)
-library(gnm)
-#library(MuMIn); library(bbmle)
+library("tidyverse")
+library("gnm")
 
-# QAIC and QBIC functions -------------------------------------------------
+# QAIC and QBIC Functions -------------------------------------------------
 
-# L:   The log-likelihood, extracted by fitting the model with the non-quasi 
-#      family.
-# phi: The overdispersion parameter, extracted by fitting the quasi-family and 
-#      and dividing the deviance by the residual degrees of freedom.
-# k:   The number of parameters, extracted by taking the length of the coefficient
+# L:   The log-likelihood, calculated by summing over log-scaled output of the 
+#      probability density function of the Poisson distribution.
+# phi: The overdispersion parameter, extracted from the model summary.
+# k:   The number of model parameters, extracted by taking the length of the coefficient
 #      vector.
 # n:   The number of observations, extracted by taking the number of used 
 #      observations when fitting the model.
-calc_QAIC_QBIC <- function(model = NULL, L_hat, phi_hat, k, n, .type = "QAIC") {
-  bool <- stringr::str_detect(model$family$family, "quasi")
+
+# Function to compute the QAIC for quasi-Poisson models
+QAIC <- function(model) {
+  L_hat   <- sum(dpois(model$y, model$fitted.values, log=TRUE))
+  phi_hat <- summary(model)$dispersion
+  k       <- length(model$coefficients)
   
-  if(bool || length(bool) == 0) {
-    print("Must supply model fit with regular likelihood function or L_hat, phi_hat, k, and n.")
-  }
-  
-  if(!is.null(model)) {
-    L_hat <- as.numeric(logLik(model))
-    phi_hat <- model$deviance/model$df.residual
-    k <- length(model$coefficients)# + 2
-    n <- nrow(model$data)
-  }
-  
-  if(stringr::str_detect(tolower(.type), "aic")) {
-    -2*L_hat+2*phi_hat*k
-    #-2*L_hat/phi_hat+2*k
-  } else if(stringr::str_detect(tolower(.type), "bic")){
-    -2*L_hat+log(n)*phi_hat*k
-  }
+  -2*L_hat+2*phi_hat*k
 }
 
-# Get quasi-AIC
-qaic <- function(model = NULL, L_hat, phi_hat, k) {
-  calc_QAIC_QBIC(model = model, L_hat = L_hat, phi_hat = phi_hat, k = k, .type = "QAIC")
-}
-
-# Get quasi-BIC
-qbic <- function(model = NULL, L, phi, k, n) {
-  calc_QAIC_QBIC(model = model, L_hat = L_hat, phi_hat = phi_hat, k = k, n = n, .type = "QBIC")
+# Function to compute the QBIC for quasi-Poisson models
+QBIC <- function(model) {
+  L_hat   <- sum(dpois(model$y, model$fitted.values, log=TRUE))
+  phi_hat <- summary(model)$dispersion
+  k       <- length(model$coefficients)
+  n       <- nrow(model$data)
+  
+  -2*L_hat+log(n)*phi_hat*k
 }
 
 # Example usage -----------------------------------------------------------
 
-# Say we have the following model:
-fit_quasi <- glm(price ~ carat + x,
-                 family = quasipoisson,
-                 data = diamonds)
+# For this example we use the diamonds data set (downloaded with tidyverse)
+help(diamonds)
+diamonds
 
-# Because we are using the quasipoisson family, we cannot extract the 
-# log-likelihood.
-#
-# To get the log-likelihood, we must fit the model with the non-quasi version
-# of the likelihood argument.
+# Consider the following models:
+# Poisson model
 fit0 <- glm(price ~ carat + x,
             family = poisson,
             data = diamonds)
 
-# Now we can extract the values we need to calculated the QAIC and QBIC
-L_hat <- as.numeric(logLik(fit0))
-phi_hat <- fit0$deviance/fit0$df.residual
-k <- length(fit0$coefficients)
-n <- nrow(fit0$data)
+# quasi-Poisson model
+fit1 <- glm(price ~ carat + x,
+            family = quasipoisson,
+            data = diamonds)
 
-# QAIC
--2*L_hat+2*phi_hat*k
-# QBIC
--2*L_hat+log(n)*phi_hat*k
+# Conditionally fit quasi-Poisson model
+fit2 <- gnm(price ~ carat + x,
+            family = quasipoisson,
+            eliminate = color,
+            data = diamonds)
 
-# Alternatively, we can use the functions defined above. However, we need to 
-# give the correct model.
-qaic(fit_qasi)
-qaic(fit0)
+# To get the AIC, normally we can just use the AIC function.
+AIC(fit0)
+AIC(fit1)
+AIC(fit2)
 
-# Test out functions ------------------------------------------------------
+# Unfortunately, this does not work for quasi-families because their
+# log-likelihood is not automatically calculated. 
+logLik(fit0)
+logLik(fit1)
+logLik(fit2)
 
-# Fit models
-fit1 <- glm(price ~ carat, family = poisson, data = diamonds)
-fit2 <- update(fit1, . ~ . + x)
-fit3 <- update(fit2, . ~ . + depth)
+# However, we can still manually calculated them. 
+sum(dpois(fit0$y, fit0$fitted.values, log=TRUE))
+sum(dpois(fit1$y, fit1$fitted.values, log=TRUE))
+sum(dpois(fit2$y, fit2$fitted.values, log=TRUE))
 
-models <- list(fit1 = fit1, 
-               fit2 = fit2, 
-               fit3 = fit3)
+# Additionally, we need the QAIC and QBIC by the overdispersion parameter.
+# This value can be extracted from the model summary, or manually calculated
+# as the weighted sum of the square squared residuals divided by the residual 
+# degrees of freedom.
+summary(fit1)$dispersion
+sum(fit1$weights * fit1$residuals^2)/fit1$df.residual
 
-# Check AIC and BIC
-map_dfr(models, \(x) {
-  tibble(AIC = AIC(x), 
-         QAIC = qaic(x),
-         BIC = BIC(x),
-         QBIC = qbic(x)
-  )
-}, .id = "Model")
+# Note that using the Poisson family instead of the quasi-Poisson forces the
+# dispersion parameter to 1. 
+summary(fit0)$dispersion
+sum(fit0$weights * fit0$residuals^2)/fit0$df.residual
 
-fit1$deviance
-fit2$deviance
-fit3$deviance
+# Now we can calculate the QAIC with the formula from Equation 13 of 
+# Gasparrini's 2010, DLNM paper (https://doi.org/10.1002%2Fsim.3940)
+QAIC(fit0)
+QAIC(fit1)
+QAIC(fit2)
 
-fit1$df.residual
-fit2$df.residual
-fit3$df.residual
+# Similarly, we calculate the QBIC
+QBIC(fit0)
+QBIC(fit1)
+QBIC(fit2)
